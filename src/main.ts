@@ -5,6 +5,7 @@ import { CodeReviewOrchestrator } from './orchestrator.js';
 import { ReportGenerator } from './utils/report-generator.js';
 import { logger } from './utils/logger.js';
 import { formatError } from './utils/error-handler.js';
+import { validateEnv } from './config/env.js';
 
 // Load environment variables
 dotenv.config();
@@ -42,56 +43,24 @@ Pull request number must be a positive integer.
     process.exit(1);
   }
 
-  // 2. Validate authentication (Anthropic API or AWS Bedrock)
-  const hasAnthropicKey = Boolean(process.env.ANTHROPIC_API_KEY);
-  const hasAwsCreds = Boolean(
-    process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY
-  );
+  // 2. Validate required environment configuration
+  const env = validateEnv();
 
-  if (hasAwsCreds) {
-    if (!process.env.AWS_REGION) {
-      console.error('❌ Error: AWS_REGION is required when using AWS Bedrock authentication.');
-      process.exit(1);
-    }
+  if (env.AWS_ACCESS_KEY_ID && env.AWS_SECRET_ACCESS_KEY) {
     logger.info('🔐 Using AWS Bedrock authentication');
-  } else if (hasAnthropicKey) {
-    logger.info('🔐 Using Anthropic API authentication');
   } else {
-    console.error(`
-❌ Error: No valid authentication credentials found.
-
-Please configure one of the following in your environment or .env file:
-
-Option 1 (Anthropic API):
-  ANTHROPIC_API_KEY=sk-ant-your-key-here
-
-Option 2 (AWS Bedrock):
-  AWS_ACCESS_KEY_ID=your-access-key-id
-  AWS_SECRET_ACCESS_KEY=your-secret-access-key
-  AWS_REGION=us-east-1
-`);
-    process.exit(1);
+    logger.info('🔐 Using Anthropic API authentication');
   }
 
-  // 3. Validate ANTHROPIC_MODEL environment variable
-  const model = process.env.ANTHROPIC_MODEL;
-  if (!model) {
-    console.error(`
-❌ Error: ANTHROPIC_MODEL environment variable is required.
-
-Please configure ANTHROPIC_MODEL in your .env file:
-  - For Anthropic API: ANTHROPIC_MODEL=claude-sonnet-4-5-20250929
-  - For AWS Bedrock:   ANTHROPIC_MODEL=us.anthropic.claude-sonnet-4-5-20250929-v1:0
-`);
-    process.exit(1);
-  }
+  // 3. Use validated model configuration
+  const model = env.ANTHROPIC_MODEL;
 
   console.log(`\n🚀 Initializing Code Review for ${owner}/${repo} PR #${prNumber}...`);
 
   try {
     const orchestrator = new CodeReviewOrchestrator({
       model,
-      projectRoot: process.env.PROJECT_ROOT || process.cwd()
+      projectRoot: env.PROJECT_ROOT || process.cwd()
     });
 
     console.log(`🤖 Running multi-agent review with model: ${model}`);
