@@ -1,0 +1,155 @@
+{
+  "pullRequest": {
+    "owner": "airaamane",
+    "repo": "simple-todo-app",
+    "number": 2
+  },
+  "fileReviews": [
+    {
+      "file": "src/store/todoStore.js",
+      "codeQuality": {
+        "file": "src/store/todoStore.js",
+        "issues": [
+          {
+            "line": 34,
+            "severity": "critical",
+            "category": "bug-risk",
+            "description": "Duplicate check uses case-sensitive comparison. \"Buy milk\" and \"buy milk\" are treated as distinct entries.",
+            "suggestion": "Normalize input with `.trim().toLowerCase()` before comparison: `tasks.some(t => t.title.trim().toLowerCase() === newTitle.trim().toLowerCase())`"
+          },
+          {
+            "line": 52,
+            "severity": "high",
+            "category": "security",
+            "description": "Task title is stored without sanitization; XSS possible if titles are rendered with dangerouslySetInnerHTML elsewhere.",
+            "suggestion": "Sanitize input with DOMPurify or a whitelist regex before storing: `title: DOMPurify.sanitize(rawTitle)`"
+          },
+          {
+            "line": 67,
+            "severity": "medium",
+            "category": "maintainability",
+            "description": "Store mutation logic directly modifies array indices (tasks[idx].completed = true) instead of using immutable updates.",
+            "suggestion": "Return a new array: `return tasks.map(t => t.id === id ? { ...t, completed: true } : t)`"
+          }
+        ],
+        "overallScore": 61,
+        "summary": "Critical bug in duplicate detection (case-insensitive mismatch) and a high-severity XSS risk from unsanitized input. Immediate fixes required."
+      },
+      "testCoverage": {
+        "file": "src/store/todoStore.js",
+        "hasTests": true,
+        "testFiles": [
+          "src/store/todoStore.test.js"
+        ],
+        "untestedPaths": [
+          {
+            "type": "edge-case",
+            "location": "addTask with case-insensitive duplicate",
+            "priority": "critical",
+            "reasoning": "The duplicate bug was introduced because this edge case had no test. Adding \"Buy Milk\" after \"buy milk\" should be rejected.",
+            "suggestedTest": "it(\"should reject case-insensitive duplicates\", () => { addTask(\"buy milk\"); expect(() => addTask(\"Buy Milk\")).toThrow(/duplicate/i); });"
+          },
+          {
+            "type": "edge-case",
+            "location": "addTask with whitespace-only title",
+            "priority": "high",
+            "reasoning": "Whitespace-only titles can be added, creating invisible tasks.",
+            "suggestedTest": "it(\"should reject whitespace-only tasks\", () => { expect(() => addTask(\"   \")).toThrow(/invalid/i); });"
+          },
+          {
+            "type": "branch",
+            "location": "toggleTask when id does not exist",
+            "priority": "medium",
+            "reasoning": "Toggle on a non-existent ID silently fails, which can mask integration bugs.",
+            "suggestedTest": "it(\"should throw or return false for non-existent task id\", () => { expect(() => toggleTask(\"non-existent-id\")).toThrow(); });"
+          }
+        ],
+        "coverageEstimate": 55,
+        "summary": "Store has some tests but critical edge cases are missing. The case-insensitive duplicate and whitespace-title cases are the highest priority additions."
+      },
+      "refactorings": {
+        "file": "src/store/todoStore.js",
+        "suggestions": [
+          {
+            "type": "pattern-improvement",
+            "location": "Lines 20–70: store mutation pattern",
+            "impact": "high",
+            "description": "Adopt a reducer pattern (or use Zustand/Redux Toolkit) to make state transitions explicit and testable.",
+            "before": "function addTask(title) {\n  if (isDuplicate(title)) return;\n  tasks.push({ id: uuid(), title, completed: false });\n}",
+            "after": "function reducer(state, action) {\n  switch (action.type) {\n    case \"ADD_TASK\":\n      if (isDuplicate(state.tasks, action.payload)) return state;\n      return { ...state, tasks: [...state.tasks, { id: uuid(), title: action.payload, completed: false }] };\n  }\n}",
+            "benefits": "Makes state transitions pure and predictable. Eliminates mutation bugs. Greatly improves testability."
+          },
+          {
+            "type": "extract-function",
+            "location": "Line 34: duplicate check inline logic",
+            "impact": "medium",
+            "description": "Extract the duplicate detection into a pure function `isExistingTask(tasks, title)` for reuse and unit testing.",
+            "before": "if (tasks.some(t => t.title === newTitle)) return;",
+            "after": "const isExistingTask = (tasks, title) =>\n  tasks.some(t => t.title.trim().toLowerCase() === title.trim().toLowerCase());\n\nif (isExistingTask(tasks, newTitle)) return;",
+            "benefits": "Pure function is trivially unit-tested and reusable across contexts (e.g. API validation layer)."
+          }
+        ],
+        "summary": "The store would benefit significantly from adopting a reducer/immutable pattern and extracting the duplicate-detection logic into a pure, testable function."
+      }
+    }
+  ],
+  "summary": {
+    "totalFiles": 1,
+    "overallScore": 61,
+    "criticalIssues": 1,
+    "highPriorityTests": 2,
+    "refactoringOpportunities": 2
+  },
+  "recommendations": [
+    {
+      "priority": "critical",
+      "category": "Bug Fix",
+      "description": "Duplicate check is case-sensitive — normalize titles to lowercase before comparison to fix the root bug this PR attempts to address.",
+      "files": [
+        "src/store/todoStore.js"
+      ]
+    },
+    {
+      "priority": "high",
+      "category": "Security",
+      "description": "Sanitize task titles with DOMPurify before storing to prevent potential XSS injection.",
+      "files": [
+        "src/store/todoStore.js"
+      ]
+    },
+    {
+      "priority": "high",
+      "category": "Test Coverage",
+      "description": "Add test for case-insensitive duplicate rejection and whitespace-only title validation.",
+      "files": [
+        "src/store/todoStore.test.js"
+      ]
+    },
+    {
+      "priority": "medium",
+      "category": "Architecture",
+      "description": "Replace mutable array push/splice patterns with immutable reducer pattern to prevent future mutation bugs.",
+      "files": [
+        "src/store/todoStore.js"
+      ]
+    },
+    {
+      "priority": "low",
+      "category": "Code Quality",
+      "description": "Extract `isExistingTask` as a standalone pure function for reuse and isolated testing.",
+      "files": [
+        "src/store/todoStore.js"
+      ]
+    }
+  ],
+  "metadata": {
+    "analyzedAt": "2026-09-23T12:05:00.000Z",
+    "duration": 5241,
+    "agentVersions": {
+      "code-quality-analyzer": "1.0.0",
+      "test-coverage-analyzer": "1.0.0",
+      "refactoring-suggester": "1.0.0",
+      "orchestrator": "1.0.0"
+    }
+  }
+}

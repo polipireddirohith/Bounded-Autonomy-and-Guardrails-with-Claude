@@ -1,0 +1,177 @@
+{
+  "pullRequest": {
+    "owner": "airaamane",
+    "repo": "simple-todo-app",
+    "number": 1
+  },
+  "fileReviews": [
+    {
+      "file": "src/components/TaskFilter.jsx",
+      "codeQuality": {
+        "file": "src/components/TaskFilter.jsx",
+        "issues": [
+          {
+            "line": 12,
+            "severity": "high",
+            "category": "bug-risk",
+            "description": "Filter comparison uses loose equality (==) instead of strict (===), risking type coercion bugs.",
+            "suggestion": "Replace `status == task.status` with `status === task.status` to ensure type-safe comparison."
+          },
+          {
+            "line": 28,
+            "severity": "medium",
+            "category": "performance",
+            "description": "Array.filter is called on every render without memoization, causing unnecessary re-computation.",
+            "suggestion": "Wrap the filter logic in useMemo with [tasks, activeFilter] as dependencies."
+          },
+          {
+            "line": 45,
+            "severity": "low",
+            "category": "style",
+            "description": "Inline arrow function in JSX prop creates a new function reference on every render.",
+            "suggestion": "Extract `handleFilterChange` as a named callback with useCallback."
+          }
+        ],
+        "overallScore": 74,
+        "summary": "TaskFilter component has minor type-safety and performance concerns. The loose equality check is the most critical fix needed."
+      },
+      "testCoverage": {
+        "file": "src/components/TaskFilter.jsx",
+        "hasTests": false,
+        "testFiles": [],
+        "untestedPaths": [
+          {
+            "type": "function",
+            "location": "handleFilterChange(status: string)",
+            "priority": "high",
+            "reasoning": "Core filtering logic is untested; a bug here would break task visibility for all users.",
+            "suggestedTest": "it(\"should filter tasks by status\", () => { render(<TaskFilter tasks={mockTasks} />); fireEvent.click(getByText(\"Active\")); expect(queryByText(\"Completed Task\")).not.toBeInTheDocument(); });"
+          },
+          {
+            "type": "edge-case",
+            "location": "TaskFilter when tasks array is empty",
+            "priority": "medium",
+            "reasoning": "Empty state UI branch is uncovered; an undefined access could crash the component.",
+            "suggestedTest": "it(\"should show empty state when no tasks match filter\", () => { render(<TaskFilter tasks={[]} />); expect(getByText(/no tasks/i)).toBeInTheDocument(); });"
+          },
+          {
+            "type": "branch",
+            "location": "filter === \"all\" early-return branch",
+            "priority": "medium",
+            "reasoning": "The \"show all\" code path has no test coverage.",
+            "suggestedTest": "it(\"should show all tasks when filter is all\", () => { render(<TaskFilter tasks={mockTasks} filter=\"all\" />); expect(getAllByRole(\"listitem\")).toHaveLength(mockTasks.length); });"
+          }
+        ],
+        "coverageEstimate": 0,
+        "summary": "No tests exist for TaskFilter. The core filtering function and edge cases (empty list, \"all\" filter) require immediate coverage."
+      },
+      "refactorings": {
+        "file": "src/components/TaskFilter.jsx",
+        "suggestions": [
+          {
+            "type": "extract-function",
+            "location": "Lines 10–30: inline filter logic",
+            "impact": "medium",
+            "description": "Extract filtering logic into a custom hook `useTaskFilter` to separate concerns and improve reusability.",
+            "before": "const filtered = tasks.filter(t => t.status == activeFilter || activeFilter === \"all\");",
+            "after": "const filtered = useTaskFilter(tasks, activeFilter); // hooks/useTaskFilter.ts",
+            "benefits": "Improves testability, reusability across components, and keeps TaskFilter as a pure presentational component."
+          },
+          {
+            "type": "modernize",
+            "location": "Lines 40–55: filter button rendering",
+            "impact": "low",
+            "description": "Replace manual button array with a data-driven approach using a config array.",
+            "before": "<button onClick={() => setFilter(\"all\")}>All</button>\n<button onClick={() => setFilter(\"active\")}>Active</button>\n<button onClick={() => setFilter(\"completed\")}>Completed</button>",
+            "after": "const FILTERS = [\"all\",\"active\",\"completed\"];\n{FILTERS.map(f => <button key={f} onClick={() => setFilter(f)}>{f}</button>)}",
+            "benefits": "Makes adding new filter options trivial and eliminates repetitive JSX."
+          }
+        ],
+        "summary": "TaskFilter would benefit from extracting filter logic into a custom hook and adopting a data-driven button pattern."
+      }
+    },
+    {
+      "file": "src/hooks/useTaskFilter.test.js",
+      "codeQuality": {
+        "file": "src/hooks/useTaskFilter.test.js",
+        "issues": [],
+        "overallScore": 88,
+        "summary": "Test file is well-structured. No significant issues found."
+      },
+      "testCoverage": {
+        "file": "src/hooks/useTaskFilter.test.js",
+        "hasTests": true,
+        "testFiles": [
+          "src/hooks/useTaskFilter.test.js"
+        ],
+        "untestedPaths": [],
+        "coverageEstimate": 85,
+        "summary": "Good coverage of the hook. Consider adding integration tests with the component."
+      },
+      "refactorings": {
+        "file": "src/hooks/useTaskFilter.test.js",
+        "suggestions": [],
+        "summary": "Test file is clean and well-organized. No refactoring needed."
+      }
+    }
+  ],
+  "summary": {
+    "totalFiles": 2,
+    "overallScore": 76,
+    "criticalIssues": 0,
+    "highPriorityTests": 1,
+    "refactoringOpportunities": 2
+  },
+  "recommendations": [
+    {
+      "priority": "high",
+      "category": "Bug Risk",
+      "description": "Fix loose equality (==) in TaskFilter status comparison to prevent type coercion bugs.",
+      "files": [
+        "src/components/TaskFilter.jsx"
+      ]
+    },
+    {
+      "priority": "high",
+      "category": "Test Coverage",
+      "description": "Add unit tests for TaskFilter filtering logic — currently at 0% coverage.",
+      "files": [
+        "src/components/TaskFilter.jsx"
+      ]
+    },
+    {
+      "priority": "medium",
+      "category": "Performance",
+      "description": "Memoize filtered task array with useMemo to avoid re-computation on unrelated renders.",
+      "files": [
+        "src/components/TaskFilter.jsx"
+      ]
+    },
+    {
+      "priority": "medium",
+      "category": "Architecture",
+      "description": "Extract filter logic into a custom useTaskFilter hook for separation of concerns.",
+      "files": [
+        "src/components/TaskFilter.jsx"
+      ]
+    },
+    {
+      "priority": "low",
+      "category": "Code Style",
+      "description": "Use useCallback for event handler to avoid creating new function references on every render.",
+      "files": [
+        "src/components/TaskFilter.jsx"
+      ]
+    }
+  ],
+  "metadata": {
+    "analyzedAt": "2026-09-23T12:00:00.000Z",
+    "duration": 4823,
+    "agentVersions": {
+      "code-quality-analyzer": "1.0.0",
+      "test-coverage-analyzer": "1.0.0",
+      "refactoring-suggester": "1.0.0",
+      "orchestrator": "1.0.0"
+    }
+  }
+}

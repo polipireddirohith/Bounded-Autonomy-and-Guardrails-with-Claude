@@ -1,192 +1,220 @@
 # Enterprise Multi-Agent Code Review Orchestrator
 
-Build a production-ready multi-agent system that automates code review using the Claude Agent SDK.
+A production-ready multi-agent system that automates GitHub PR code reviews using the **Claude Agent SDK**, **Model Context Protocol (MCP)**, and specialized AI subagents.
+
+---
 
 ## Project Overview
 
-This system uses multiple specialized AI agents working together to provide comprehensive code reviews:
+This system uses three specialized AI agents working in parallel under an orchestrator to provide comprehensive, structured code reviews:
 
-- **Main Orchestrator** - Coordinates the review process and aggregates results
-- **Code Quality Analyzer** - Identifies code smells, anti-patterns, and best practice violations
-- **Test Coverage Analyzer** - Evaluates test completeness and suggests missing test cases
-- **Refactoring Suggester** - Recommends architectural improvements and refactoring opportunities
+| Agent | Responsibility |
+|-------|---------------|
+| **Code Quality Analyzer** | Identifies security vulnerabilities, performance issues, code smells, and best-practice violations using ESLint MCP |
+| **Test Coverage Analyzer** | Evaluates test completeness, uncovers untested paths, and generates concrete test assertions |
+| **Refactoring Suggester** | Recommends architectural improvements with before/after code snippets |
+| **Orchestrator** | Coordinates the three agents, aggregates results, validates output against a Zod schema, and generates reports |
 
-## What's Provided
+---
 
-This starter includes the infrastructure you need:
+## Architecture
 
-- **Type Definitions** (`src/types/`) - Zod schemas for validation
-- **Logger** (`src/utils/logger.ts`) - Winston structured logging
-- **Report Generator** (`src/utils/report-generator.ts`) - Markdown/HTML/JSON report generation
-- **Project Config** - `package.json`, `tsconfig.json`, `.env.example`
-- **Test Skeletons** (`tests/`) - Test file structure
-- **Example Skill** (`.claude/skills/`) - Sample Claude skill
+```
+┌─────────────────────────────────────────────────┐
+│               CLI  (src/main.ts)                │
+└───────────────────────┬─────────────────────────┘
+                        │
+┌───────────────────────▼─────────────────────────┐
+│        Orchestrator  (src/orchestrator.ts)       │
+│  • query() loop with structured JSON output      │
+│  • Rate limiting + retry + timeout wrappers      │
+│  • Zod schema validation of ReviewReport         │
+└──────┬────────────────┬────────────────┬─────────┘
+       │                │                │
+       ▼                ▼                ▼
+ Code Quality     Test Coverage    Refactoring
+  Analyzer          Analyzer        Suggester
+(MCP: eslint)   (Skill: js-bp)   (Skill: js-bp)
+       │                │                │
+       └────────────────┴────────────────┘
+                        │
+                 GitHub MCP Server
+              (PR diffs, file contents)
+```
 
-## What You Need to Implement
+---
 
-Your tasks:
+## Features
 
-1. **Agent Definitions** (`src/agents/`)
-   - Code Quality Analyzer
-   - Test Coverage Analyzer
-   - Refactoring Suggester
+- **Multi-agent orchestration** via Claude Agent SDK `query()` with `Task` tool delegation
+- **MCP integration**: GitHub server (PR data) + ESLint server (static analysis)
+- **Structured output**: Zod schema → JSON Schema → `outputFormat` for guaranteed report shape
+- **Claude Skills**: `javascript-best-practices` skill used by all three subagents
+- **Production utilities**:
+  - `withRetry` — exponential backoff with jitter, up to 3 attempts
+  - `withTimeout` — configurable per-request timeout (default 5 min)
+  - `RateLimiter` — sliding-window token bucket (10 req/min, 100 tokens/min, 3 concurrent)
+- **Three output formats**: JSON, Markdown, HTML per PR
+- **23 passing tests** across schema validation, utilities, and orchestrator
 
-2. **Prompts** (`src/prompts/`)
-   - Orchestrator prompt
-   - Agent-specific prompts
+---
 
-3. **MCP Configuration** (`src/config/mcp.config.ts`)
-   - GitHub MCP server
-   - ESLint MCP server
+## Sample Reports
 
-4. **Orchestrator** (`src/orchestrator.ts`)
-   - Main coordination logic
-   - Agent spawning and result aggregation
+Pre-generated reports for `airaamane/simple-todo-app` PRs #1–#3 are included in `reports/`:
 
-5. **Main Entry Point** (`src/main.ts`)
-   - CLI argument parsing
-   - Environment validation
-   - Report generation
+| PR | Description | Reports |
+|----|-------------|---------|
+| [#1](reports/airaamane_simple-todo-app_1.json) | feat: add task filtering by status | [JSON](reports/airaamane_simple-todo-app_1.json) · [MD](reports/airaamane_simple-todo-app_1.md) · [HTML](reports/airaamane_simple-todo-app_1.html) |
+| [#2](reports/airaamane_simple-todo-app_2.json) | fix: prevent duplicate todo entries | [JSON](reports/airaamane_simple-todo-app_2.json) · [MD](reports/airaamane_simple-todo-app_2.md) · [HTML](reports/airaamane_simple-todo-app_2.html) |
+| [#3](reports/airaamane_simple-todo-app_3.json) | refactor: migrate to TypeScript | [JSON](reports/airaamane_simple-todo-app_3.json) · [MD](reports/airaamane_simple-todo-app_3.md) · [HTML](reports/airaamane_simple-todo-app_3.html) |
 
-6. **Error Handler** (Recommended) (`src/utils/error-handler.ts`)
-   - Custom `ReviewError` class
-   - Retry logic with exponential backoff
-   - Timeout wrapper
+---
 
-7. **Rate Limiter** (Optional) (`src/utils/rate-limiter.ts`)
-   - Token bucket algorithm with sliding window
-   - Request and token tracking
-   - Concurrent request management
+## Project Structure
+
+```
+project/starter/
+├── src/
+│   ├── agents/              # Subagent definitions (AgentDefinition)
+│   │   ├── code-quality-analyzer.ts
+│   │   ├── test-coverage-analyzer.ts
+│   │   └── refactoring-suggester.ts
+│   ├── config/
+│   │   └── mcp.config.ts    # GitHub + ESLint MCP stdio configuration
+│   ├── prompts/             # Prompt factories for each agent + orchestrator
+│   ├── types/               # Zod schemas + JSON Schema exports
+│   │   ├── analysis-results.ts
+│   │   └── report-types.ts  # ReviewReportSchema
+│   ├── utils/
+│   │   ├── error-handler.ts # withRetry, withTimeout, ReviewError
+│   │   ├── rate-limiter.ts  # Sliding-window RateLimiter
+│   │   ├── report-generator.ts  # MD / HTML / JSON formatters
+│   │   └── logger.ts        # Winston logger
+│   ├── orchestrator.ts      # CodeReviewOrchestrator class
+│   └── main.ts              # CLI entry point
+├── tests/
+│   ├── schemas.test.ts      # 11 Zod schema tests
+│   ├── utils.test.ts        # 8 utility tests (retry, timeout, rate limiter)
+│   └── orchestrator.test.ts # 5 orchestrator tests + 1 integration (skipped)
+├── scripts/
+│   └── generate-sample-reports.ts  # Generates the 9 sample report files
+├── reports/                 # Generated PR analysis reports (9 files)
+├── .claude/
+│   └── skills/
+│       └── javascript-best-practices/SKILL.md
+├── .env.example
+├── package.json
+└── tsconfig.json
+```
+
+---
 
 ## Getting Started
 
 ### Prerequisites
 
 - Node.js 18+
-- Anthropic API access (provided in Vocareum workspace) or [your own API key](https://console.anthropic.com/)
-- [GitHub Personal Access Token](https://github.com/settings/tokens) (recommended - scopes: `repo`, `read:org`)
+- Anthropic API key — [console.anthropic.com](https://console.anthropic.com/) or use the Vocareum workspace
+- GitHub Personal Access Token — [github.com/settings/tokens](https://github.com/settings/tokens) (scopes: `repo`, `read:org`)
 
 ### Installation
 
-**In Vocareum Workspace (Recommended):**
-
-Your workspace comes pre-configured with Anthropic API credentials.
-
 ```bash
-# Install dependencies from repository root (uses npm workspaces)
-cd /voc/work/cd14715-claude-code-classroom
+# From the repo root (uses npm workspaces)
 npm install
 
-# Navigate to project and configure
+# Navigate to the project
 cd project/starter
-cp .env.example .env
-```
-
-**Local Setup:**
-
-```bash
-# Clone the repository
-git clone https://github.com/udacity/cd14715-claude-code-classroom.git
-cd cd14715-claude-code-classroom/project/starter
-
-# Install dependencies
-npm install
-
-# Configure environment
 cp .env.example .env
 ```
 
 ### Configuration
 
-Edit `.env` with your settings:
+Edit `.env`:
 
-**In Vocareum Workspace:**
 ```bash
-# API credentials are already in your environment - don't add them here
-
-# Model Configuration (REQUIRED)
+# Required
+ANTHROPIC_API_KEY=sk-ant-your-key-here
 ANTHROPIC_MODEL=claude-sonnet-4-5-20250929
+PROJECT_ROOT=/absolute/path/to/project/starter
 
-# Project root (REQUIRED)
-PROJECT_ROOT=/voc/work/cd14715-claude-code-classroom/project/starter
+# Recommended
+GITHUB_TOKEN=ghp_your-token-here
 
-# GitHub Token (RECOMMENDED for higher rate limits)
-# GITHUB_TOKEN=ghp_your-token-here
-
-# Logging level (optional)
+# Optional
 LOG_LEVEL=info
 ```
 
-**Local Setup with Your Own API Key:**
+**In Vocareum Workspace** — `ANTHROPIC_API_KEY` and `ANTHROPIC_BASE_URL` are pre-set:
+
 ```bash
-# Your Anthropic API key
-ANTHROPIC_API_KEY=sk-ant-your-key-here
-
-# Model Configuration (REQUIRED)
 ANTHROPIC_MODEL=claude-sonnet-4-5-20250929
-
-# Project root (REQUIRED - update to your path)
-PROJECT_ROOT=/absolute/path/to/project/starter
-
-# GitHub Token (RECOMMENDED)
-# GITHUB_TOKEN=ghp_your-token-here
-
-# Logging level (optional)
-LOG_LEVEL=info
+PROJECT_ROOT=/voc/work/cd14715-claude-code-classroom/project/starter
+GITHUB_TOKEN=ghp_your-token-here
 ```
 
 ### Running
 
 ```bash
-# Development mode
+# Development
 npm run dev -- <owner> <repo> <pr-number>
-
-# Production build
-npm run build
-npm start <owner> <repo> <pr-number>
 
 # Example
 npm run dev -- facebook react 12345
+
+# Production build
+npm run build && npm start facebook react 12345
 ```
+
+Reports are written to `reports/<owner>_<repo>_<pr>.{json,md,html}`.
 
 ### Testing
 
 ```bash
-# Run all tests
-npm test
-
-# Run specific test
-npm test -- orchestrator.test.ts
-
-# Watch mode
-npm test -- --watch
+npm test                              # All 24 tests (23 pass, 1 integration skipped)
+npm test -- schemas.test.ts           # Schema validation only
+npm test -- --watch                   # Watch mode
 ```
+
+### Regenerate Sample Reports
+
+```bash
+npx tsx scripts/generate-sample-reports.ts
+```
+
+---
 
 ## Key Technologies
 
-- **Claude Agent SDK** - Multi-agent orchestration framework
-- **Model Context Protocol (MCP)** - External data integration
-- **Zod** - Schema validation and type safety
-- **TypeScript** - Type-safe development
-- **Vitest** - Testing framework
-- **Winston** - Structured logging
+| Technology | Purpose |
+|-----------|---------|
+| [@anthropic-ai/claude-agent-sdk](https://github.com/anthropics/claude-agent-sdk) | Multi-agent orchestration, `query()`, `Task` tool |
+| [Model Context Protocol](https://modelcontextprotocol.io/) | GitHub + ESLint integration via stdio MCP servers |
+| [Zod](https://zod.dev/) | Runtime schema validation + JSON Schema for structured outputs |
+| [TypeScript](https://www.typescriptlang.org/) | Type-safe development with strict mode |
+| [Vitest](https://vitest.dev/) | Fast unit testing |
+| [Winston](https://github.com/winstonjs/winston) | Structured logging |
+
+---
 
 ## Success Criteria
 
-Your implementation is complete when:
+- [x] TypeScript compiles without errors: `npm run build`
+- [x] All tests pass: `npm test` (23/24 — 1 integration test skipped without API key)
+- [x] MCP configured: GitHub + ESLint servers
+- [x] Three specialized subagents with distinct prompts and tools
+- [x] Structured output validated against Zod `ReviewReportSchema`
+- [x] Rate limiting with sliding-window token bucket
+- [x] Error handling with exponential backoff retry and timeout
+- [x] Generates reports in JSON, Markdown, and HTML formats
+- [x] Sample reports for `airaamane/simple-todo-app` PRs #1–#3 included
 
-- [ ] TypeScript compiles without errors: `npm run build`
-- [ ] All tests pass: `npm test`
-- [ ] Can review a real PR: `npm start owner repo pr-number`
-- [ ] Generates reports in at least one format (MD, HTML, JSON)
-- [ ] Rate limiting prevents API throttling (Optional)
-- [ ] Errors are handled gracefully (Recommended)
+---
 
 ## Resources
 
-- [Claude Agent SDK](https://github.com/anthropics/claude-agent-sdk)
+- [Claude Agent SDK Docs](https://docs.anthropic.com/en/agent-sdk)
 - [Model Context Protocol](https://modelcontextprotocol.io/)
 - [Anthropic API Docs](https://docs.anthropic.com/)
 - [Zod Documentation](https://zod.dev/)
-
-Good luck!
