@@ -18,6 +18,8 @@ export interface McpServerConfig {
   env?: Record<string, string>;
 }
 
+const githubToken = process.env.GITHUB_TOKEN;
+
 export const mcpServersConfig = {
   /**
    * GitHub MCP Server
@@ -28,7 +30,7 @@ export const mcpServersConfig = {
     command: 'npx',
     args: ['-y', '@modelcontextprotocol/server-github'],
     env: {
-      GITHUB_PERSONAL_ACCESS_TOKEN: process.env.GITHUB_TOKEN || ''
+      GITHUB_PERSONAL_ACCESS_TOKEN: githubToken ?? ''
     }
   },
 
